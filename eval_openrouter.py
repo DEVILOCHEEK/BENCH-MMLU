@@ -56,67 +56,67 @@ def eval(args, subject, dev_df, test_df):
     answers = choices[:test_df.shape[1]-2]
     num_choices = len(answers)
 
-for i in tqdm(range(test_df.shape[0]), desc="Evaluating sample"):
-    example_text = test_df.iloc[i, 0]
-    correct_letter = test_df.iloc[i, -1]
+    for i in tqdm(range(test_df.shape[0]), desc="Evaluating sample"):
+        example_text = test_df.iloc[i, 0]
+        correct_letter = test_df.iloc[i, -1]
 
-    # Знайдемо індекс правильного варіанту (0-based) серед A, B, C, D
-    correct_index = choices.index(correct_letter)
-    correct_text = test_df.iloc[i, 1 + correct_index]  # варіант тексту відповіді
+        # Знайдемо індекс правильного варіанту (0-based) серед A, B, C, D
+        correct_index = choices.index(correct_letter)
+        correct_text = test_df.iloc[i, 1 + correct_index]  # варіант тексту відповіді
 
-    tqdm.write(f"Приклад {i+1}: {example_text}")
-    tqdm.write(f"Правильна відповідь: {correct_text}")
+        tqdm.write(f"Приклад {i+1}: {example_text}")
+        tqdm.write(f"Правильна відповідь: {correct_text}")
 
-    k = args.ntrain
-    prompt_end = format_example(test_df, i, include_answer=False)
-    train_prompt = gen_prompt(dev_df, subject, k)
-    prompt = train_prompt + prompt_end
-
-    # Обрізка, якщо дуже довго
-    while crop(prompt) != prompt:
-        k -= 1
+        k = args.ntrain
+        prompt_end = format_example(test_df, i, include_answer=False)
         train_prompt = gen_prompt(dev_df, subject, k)
         prompt = train_prompt + prompt_end
-        if k == 0:
-            break
 
-    label = correct_letter
+        # Обрізка, якщо дуже довго
+        while crop(prompt) != prompt:
+            k -= 1
+            train_prompt = gen_prompt(dev_df, subject, k)
+            prompt = train_prompt + prompt_end
+            if k == 0:
+                break
 
-    while True:
-        try:
-            response = client.chat.completions.create(
-                model="gpt-4o",
-                messages=[{"role": "user", "content": prompt}],
-                max_tokens=10,
-                temperature=0,
-            )
-            break
-        except Exception as e:
-            print(f"API error: {e}. Retrying in 1 second...")
-            time.sleep(1)
+        label = correct_letter
 
-    answer_text = response.choices[0].message.content.strip()
-    tqdm.write(f"Відповідь моделі: {answer_text}")
+        while True:
+            try:
+                response = client.chat.completions.create(
+                    model="gpt-4o",
+                    messages=[{"role": "user", "content": prompt}],
+                    max_tokens=10,
+                    temperature=0,
+                )
+                break
+            except Exception as e:
+                print(f"API error: {e}. Retrying in 1 second...")
+                time.sleep(1)
 
-    pred = None
-    for ans in answers:
-        if ans in answer_text:
-            pred = ans
-            break
+        answer_text = response.choices[0].message.content.strip()
+        tqdm.write(f"Відповідь моделі: {answer_text}")
 
-    if pred is None:
-        print(f"Warning: model answer '{answer_text}' не співпадає з варіантами {answers}. Встановлюємо дефолтний варіант '{answers[0]}'.")
-        pred = answers[0]
+        pred = None
+        for ans in answers:
+            if ans in answer_text:
+                pred = ans
+                break
 
-    pred_index = choices.index(pred)
-    pred_text = test_df.iloc[i, 1 + pred_index]
+        if pred is None:
+            print(f"Warning: model answer '{answer_text}' не співпадає з варіантами {answers}. Встановлюємо дефолтний варіант '{answers[0]}'.")
+            pred = answers[0]
 
-    tqdm.write(f"Інтерпретація відповіді моделі: {pred_text}")
+        pred_index = choices.index(pred)
+        pred_text = test_df.iloc[i, 1 + pred_index]
 
-    cors.append(pred == label)
+        tqdm.write(f"Інтерпретація відповіді моделі: {pred_text}")
 
-    # Тимчасово задаємо рівномірні ймовірності по варіантах
-    all_probs.append([1/num_choices] * num_choices)
+        cors.append(pred == label)
+
+        # Тимчасово задаємо рівномірні ймовірності по варіантах
+        all_probs.append([1/num_choices] * num_choices)
 
     acc = np.mean(cors)
     print(f"Average accuracy for {subject}: {acc:.3f}")
