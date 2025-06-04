@@ -53,6 +53,7 @@ def crop(prompt, max_tokens=4096):
 def eval(args, subject, dev_df, test_df):
     cors = []
     all_probs = []
+    model_answers = []
     answers = choices[:test_df.shape[1]-2]
     num_choices = len(answers)
 
@@ -98,6 +99,8 @@ def eval(args, subject, dev_df, test_df):
         answer_text = response.choices[0].message.content.strip()
         tqdm.write(f"Відповідь моделі: {answer_text}")
 
+        model_answers.append(answer_text)
+
         pred = None
         for ans in answers:
             if ans in answer_text:
@@ -120,8 +123,7 @@ def eval(args, subject, dev_df, test_df):
 
     acc = np.mean(cors)
     print(f"Average accuracy for {subject}: {acc:.3f}")
-
-    return np.array(cors), acc, np.array(all_probs)
+    return np.array(cors), acc, np.array(all_probs), model_answers
 
 def main():
     parser = argparse.ArgumentParser()
@@ -151,11 +153,13 @@ def main():
         dev_df = pd.read_csv(dev_path, header=None)[:args.ntrain]
         test_df = pd.read_csv(test_path, header=None)
 
-        cors, acc, probs = eval(args, subject, dev_df, test_df)
+        cors, acc, probs, model_answers = eval(args, subject, dev_df, test_df)
 
         test_df[f"gpt4o_correct"] = cors
         for j, choice in enumerate(choices):
             test_df[f"gpt4o_choice{choice}_probs"] = probs[:, j]
+
+        test_df["gpt4o_answer_text"] = model_answers
 
         save_path = os.path.join(args.save_dir, f"{subject}.csv")
         test_df.to_csv(save_path, index=False)
