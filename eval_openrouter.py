@@ -76,7 +76,7 @@ def eval(args, subject, dev_df, test_df):
                 response = client.chat.completions.create(
                     model="gpt-4o",
                     messages=[{"role": "user", "content": prompt}],
-                    max_tokens=1,
+                    max_tokens=10,  # трохи більше токенів для відповіді
                     temperature=0,
                 )
                 break
@@ -84,21 +84,21 @@ def eval(args, subject, dev_df, test_df):
                 print(f"API error: {e}. Retrying in 1 second...")
                 time.sleep(1)
 
-        top_logprobs = response.choices[0].logprobs.top_logprobs[-1]
-        lprobs = []
-        for ans in answers:
-            key = f" {ans}"
-            if key in top_logprobs:
-                lprobs.append(top_logprobs[key])
-            else:
-                print(f"Warning: '{key}' not found in logprobs. Adding -100.")
-                lprobs.append(-100)
+        answer_text = response.choices[0].message['content'].strip()
 
-        pred = choices[np.argmax(lprobs)]
-        probs = softmax(np.array(lprobs))
+        # Шукаємо варіант відповіді серед choices
+        pred = None
+        for ans in answers:
+            if ans in answer_text:
+                pred = ans
+                break
+
+        if pred is None:
+            print(f"Warning: model answer '{answer_text}' не співпадає з варіантами {answers}. Встановлюємо дефолтний варіант '{answers[0]}'.")
+            pred = answers[0]
 
         cors.append(pred == label)
-        all_probs.append(probs)
+        all_probs.append(None)  # без ймовірностей
 
     acc = np.mean(cors)
     print(f"Average accuracy for {subject}: {acc:.3f}")
