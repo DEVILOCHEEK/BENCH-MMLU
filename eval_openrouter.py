@@ -1,18 +1,17 @@
 import argparse
-import openai
 import os
 import numpy as np
 import pandas as pd
 import time
 from tqdm import tqdm
+from openai import OpenAI
 
-# Використовуємо OpenRouter, ключ через змінну оточення OPENROUTER_API_KEY
+# Ініціалізуємо клієнта OpenAI (OpenRouter автоматично використовує OPENROUTER_API_KEY)
 OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
 if not OPENROUTER_API_KEY:
     raise ValueError("Set environment variable OPENROUTER_API_KEY with your OpenRouter API key.")
 
-openai.api_key = OPENROUTER_API_KEY
-openai.api_base = "https://openrouter.ai/api/v1"
+client = OpenAI()
 
 choices = ["A", "B", "C", "D"]
 
@@ -73,12 +72,12 @@ def eval(args, subject, dev_df, test_df):
 
         while True:
             try:
-                response = openai.Completion.create(
-                    engine="gpt-4o",
-                    prompt=prompt,
+                response = client.chat.completions.create(
+                    model="gpt-4o",
+                    messages=[{"role": "user", "content": prompt}],
                     max_tokens=1,
-                    logprobs=10,
                     temperature=0,
+                    logprobs=10,
                     echo=True
                 )
                 break
@@ -86,7 +85,7 @@ def eval(args, subject, dev_df, test_df):
                 print(f"API error: {e}. Retrying in 1 second...")
                 time.sleep(1)
 
-        top_logprobs = response["choices"][0]["logprobs"]["top_logprobs"][-1]
+        top_logprobs = response.choices[0].logprobs.top_logprobs[-1]
         lprobs = []
         for ans in answers:
             key = f" {ans}"
