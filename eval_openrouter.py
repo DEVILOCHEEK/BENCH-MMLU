@@ -50,64 +50,67 @@ def crop(prompt, max_tokens=4096):
         return prompt[-max_len:]
     return prompt
 
-def eval(args, subject, dev_df, test_df):
-    cors = []
-    all_probs = []
-    answers = choices[:test_df.shape[1]-2]
-    num_choices = len(answers)
+for i in tqdm(range(test_df.shape[0]), desc="Evaluating sample"):
+    example_text = test_df.iloc[i, 0]
+    correct_letter = test_df.iloc[i, -1]
 
-    for i in tqdm(range(test_df.shape[0]), desc="Evaluating sample"):
-        example_text = test_df.iloc[i, 0]
-        correct_answer = test_df.iloc[i, -1]
+    # Знайдемо індекс правильного варіанту (0-based) серед A, B, C, D
+    correct_index = choices.index(correct_letter)
+    correct_text = test_df.iloc[i, 1 + correct_index]  # варіант тексту відповіді
 
-        tqdm.write(f"Приклад {i+1}: {example_text}")
-        tqdm.write(f"Правильна відповідь: {correct_answer}")
+    tqdm.write(f"Приклад {i+1}: {example_text}")
+    tqdm.write(f"Правильна відповідь: {correct_text}")
 
-        k = args.ntrain
-        prompt_end = format_example(test_df, i, include_answer=False)
+    k = args.ntrain
+    prompt_end = format_example(test_df, i, include_answer=False)
+    train_prompt = gen_prompt(dev_df, subject, k)
+    prompt = train_prompt + prompt_end
+
+    # Обрізка, якщо дуже довго
+    while crop(prompt) != prompt:
+        k -= 1
         train_prompt = gen_prompt(dev_df, subject, k)
         prompt = train_prompt + prompt_end
+        if k == 0:
+            break
 
-        # Обрізка, якщо дуже довго
-        while crop(prompt) != prompt:
-            k -= 1
-            train_prompt = gen_prompt(dev_df, subject, k)
-            prompt = train_prompt + prompt_end
-            if k == 0:
-                break
+    label = correct_letter
 
-        label = correct_answer
+    while True:
+        try:
+            response = client.chat.completions.create(
+                model="gpt-4o",
+                messages=[{"role": "user", "content": prompt}],
+                max_tokens=10,
+                temperature=0,
+            )
+            break
+        except Exception as e:
+            print(f"API error: {e}. Retrying in 1 second...")
+            time.sleep(1)
 
-        while True:
-            try:
-                response = client.chat.completions.create(
-                    model="gpt-4o",
-                    messages=[{"role": "user", "content": prompt}],
-                    max_tokens=10,
-                    temperature=0,
-                )
-                break
-            except Exception as e:
-                print(f"API error: {e}. Retrying in 1 second...")
-                time.sleep(1)
+    answer_text = response.choices[0].message.content.strip()
+    tqdm.write(f"Відповідь моделі: {answer_text}")
 
-        answer_text = response.choices[0].message.content.strip()
-        tqdm.write(f"Відповідь моделі: {answer_text}")
+    pred = None
+    for ans in answers:
+        if ans in answer_text:
+            pred = ans
+            break
 
-        pred = None
-        for ans in answers:
-            if ans in answer_text:
-                pred = ans
-                break
+    if pred is None:
+        print(f"Warning: model answer '{answer_text}' не співпадає з варіантами {answers}. Встановлюємо дефолтний варіант '{answers[0]}'.")
+        pred = answers[0]
 
-        if pred is None:
-            print(f"Warning: model answer '{answer_text}' не співпадає з варіантами {answers}. Встановлюємо дефолтний варіант '{answers[0]}'.")
-            pred = answers[0]
+    pred_index = choices.index(pred)
+    pred_text = test_df.iloc[i, 1 + pred_index]
 
-        cors.append(pred == label)
+    tqdm.write(f"Інтерпретація відповіді моделі: {pred_text}")
 
-        # Тимчасово задаємо рівномірні ймовірності по варіантах
-        all_probs.append([1/num_choices] * num_choices)
+    cors.append(pred == label)
+
+    # Тимчасово задаємо рівномірні ймовірності по варіантах
+    all_probs.append([1/num_choices] * num_choices)
 
     acc = np.mean(cors)
     print(f"Average accuracy for {subject}: {acc:.3f}")
