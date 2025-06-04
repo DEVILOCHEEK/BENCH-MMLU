@@ -78,7 +78,6 @@ def eval(args, subject, dev_df, test_df):
                     messages=[{"role": "user", "content": prompt}],
                     max_tokens=1,
                     temperature=0,
-                    logprobs=10,
                 )
                 break
             except Exception as e:
