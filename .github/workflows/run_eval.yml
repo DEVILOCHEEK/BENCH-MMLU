@@ -23,6 +23,7 @@ jobs:
           python -m pip install --upgrade pip
           pip install pandas numpy requests
           pip install tqdm
+          pip install openai pandas numpy tqdm
 
       - name: Run evaluation script
         env:
