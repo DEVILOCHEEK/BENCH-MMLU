@@ -14,7 +14,7 @@ if not OPENROUTER_API_KEY:
 # Ініціалізуємо клієнта OpenAI з передачею ключа
 client = OpenAI(api_key=OPENROUTER_API_KEY, base_url="https://openrouter.ai/api/v1")
 
-choices = ["A", "B", "C", "D"]ф
+choices = ["A", "B", "C", "D"]
 
 def softmax(x):
     z = x - max(x)
