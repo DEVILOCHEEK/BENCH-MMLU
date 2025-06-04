@@ -61,19 +61,19 @@ def eval(args, subject, dev_df, test_df):
         example_text = test_df.iloc[i, 0]
         correct_letter = test_df.iloc[i, -1]
 
-        # Знайдемо індекс правильного варіанту (0-based) серед A, B, C, D
+        # Знайдемо індекс правильної літери (A, B, C, D)
         correct_index = choices.index(correct_letter)
-        correct_text = test_df.iloc[i, 1 + correct_index]  # варіант тексту відповіді
+        correct_text = test_df.iloc[i, 1 + correct_index]
 
-        tqdm.write(f"Приклад {i+1}: {example_text}")
-        tqdm.write(f"Правильна відповідь: {correct_text}")
+        print(f"Приклад {i+1}: {example_text}")
+        print(f"Правильна відповідь: {correct_text}")
 
         k = args.ntrain
         prompt_end = format_example(test_df, i, include_answer=False)
         train_prompt = gen_prompt(dev_df, subject, k)
         prompt = train_prompt + prompt_end
 
-        # Обрізка, якщо дуже довго
+        # Обрізка, якщо довжина дуже велика
         while crop(prompt) != prompt:
             k -= 1
             train_prompt = gen_prompt(dev_df, subject, k)
@@ -98,7 +98,7 @@ def eval(args, subject, dev_df, test_df):
 
         answer_text = response.choices[0].message.content.strip()
 
-        # Знаходимо літеру відповіді серед A, B, C, D
+        # Знаходимо літеру відповіді серед варіантів
         pred = None
         for ans in answers:
             if ans in answer_text:
@@ -109,22 +109,22 @@ def eval(args, subject, dev_df, test_df):
             print(f"Warning: model answer '{answer_text}' не співпадає з варіантами {answers}. Встановлюємо дефолтний варіант '{answers[0]}'.")
             pred = answers[0]
 
+        print(f"Відповідь моделі: {pred}")
+
         pred_index = choices.index(pred)
         pred_text = test_df.iloc[i, 1 + pred_index]
-        tqdm.write(f"Відповідь моделі: {pred_text}")
-        tqdm.write(f"Інтерпретація відповіді моделі: {pred_text}")
+        print(f"Інтерпретація відповіді моделі: {pred_text}")
 
-        model_answers.append(pred_text)  # Зберігаємо текст відповіді
-
+        model_answers.append(pred)
         cors.append(pred == label)
 
-        # Тимчасово задаємо рівномірні ймовірності по варіантах
         all_probs.append([1/num_choices] * num_choices)
 
         acc = np.mean(cors)
         print(f"Average accuracy for {subject}: {acc:.3f}")
 
     return np.array(cors), acc, np.array(all_probs), model_answers
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--ntrain", "-k", type=int, default=5)
