@@ -50,6 +50,12 @@ def crop(prompt, max_tokens=4096):
         return prompt[-max_len:]
     return prompt
 
+def eval(args, subject, dev_df, test_df):
+    cors = []
+    all_probs = []
+    answers = choices[:test_df.shape[1]-2]
+    num_choices = len(answers)
+
 for i in tqdm(range(test_df.shape[0]), desc="Evaluating sample"):
     example_text = test_df.iloc[i, 0]
     correct_letter = test_df.iloc[i, -1]
