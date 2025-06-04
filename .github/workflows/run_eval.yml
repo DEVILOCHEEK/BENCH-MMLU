@@ -21,12 +21,10 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install pandas numpy requests
-          pip install tqdm
-          pip install openai pandas numpy tqdm
+          pip install pandas numpy tqdm openai
 
       - name: Run evaluation script
         env:
-          OPENAI_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
         run: |
           python eval_openrouter.py --data_dir data --save_dir results --ntrain 5
