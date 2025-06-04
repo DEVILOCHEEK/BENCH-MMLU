@@ -74,17 +74,17 @@ def eval(args, subject, dev_df, test_df):
         while True:
             try:
                 response = client.chat.completions.create(
-                    model="gpt-4o",
-                    messages=[{"role": "user", "content": prompt}],
-                    max_tokens=10,  # трохи більше токенів для відповіді
-                    temperature=0,
+    model="gpt-4o",
+    messages=[{"role": "user", "content": prompt}],
+    max_tokens=10,
+    temperature=0,
                 )
                 break
             except Exception as e:
                 print(f"API error: {e}. Retrying in 1 second...")
                 time.sleep(1)
 
-        answer_text = response.choices[0].message['content'].strip()
+answer_text = response.choices[0].message.content.strip()
 
         # Шукаємо варіант відповіді серед choices
         pred = None
