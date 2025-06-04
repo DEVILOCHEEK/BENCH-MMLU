@@ -14,7 +14,7 @@ if not OPENROUTER_API_KEY:
 # Ініціалізуємо клієнта OpenAI з передачею ключа
 client = OpenAI(api_key=OPENROUTER_API_KEY, base_url="https://openrouter.ai/api/v1")
 
-choices = ["A", "B", "C", "D"]
+choices = ["A", "B", "C", "D"]ф
 
 def softmax(x):
     z = x - max(x)
@@ -109,7 +109,10 @@ def eval(args, subject, dev_df, test_df):
             print(f"Warning: model answer '{answer_text}' не співпадає з варіантами {answers}. Встановлюємо дефолтний варіант '{answers[0]}'.")
             pred = answers[0]
 
-        print(f"Відповідь моделі: {pred}")
+        pred_index = choices.index(pred)
+        pred_text = test_df.iloc[i, 1 + pred_index]
+
+        print(f"Відповідь моделі: {pred_text}")
 
         pred_index = choices.index(pred)
         pred_text = test_df.iloc[i, 1 + pred_index]
