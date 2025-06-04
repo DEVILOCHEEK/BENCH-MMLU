@@ -6,12 +6,13 @@ import time
 from tqdm import tqdm
 from openai import OpenAI
 
-# Ініціалізуємо клієнта OpenAI (OpenRouter автоматично використовує OPENROUTER_API_KEY)
+# Отримуємо ключ з середовища
 OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
 if not OPENROUTER_API_KEY:
     raise ValueError("Set environment variable OPENROUTER_API_KEY with your OpenRouter API key.")
 
-client = OpenAI()
+# Ініціалізуємо клієнта OpenAI з передачею ключа
+client = OpenAI(api_key=OPENROUTER_API_KEY)
 
 choices = ["A", "B", "C", "D"]
 
