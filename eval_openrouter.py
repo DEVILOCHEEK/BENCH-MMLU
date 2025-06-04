@@ -1,136 +1,120 @@
-import argparse
 import os
-import numpy as np
+import json
+import argparse
 import pandas as pd
-import time
 import requests
+from tqdm import tqdm
 
-choices = ["A", "B", "C", "D"]
-
-def softmax(x):
-    z = x - max(x)
-    numerator = np.exp(z)
-    denominator = np.sum(numerator)
-    return numerator / denominator
-
-def format_subject(subject):
-    return " ".join(subject.split("_"))
-
-def format_example(df, idx, include_answer=True):
-    prompt = df.iloc[idx, 0]
-    k = df.shape[1] - 2
-    for j in range(k):
-        prompt += f"\n{choices[j]}. {df.iloc[idx, j+1]}"
-    prompt += "\nAnswer:"
-    if include_answer:
-        prompt += f" {df.iloc[idx, k + 1]}\n\n"
+def format_example(question, options, answer=None):
+    prompt = f"Question: {question}\n"
+    for i, option in enumerate(options):
+        prompt += f"{chr(ord('A') + i)}. {option}\n"
+    prompt += "Answer:"
+    if answer:
+        prompt += f" {answer}"
     return prompt
 
-def gen_prompt(train_df, subject, k=-1):
-    prompt = f"The following are multiple choice questions (with answers) about {format_subject(subject)}.\n\n"
-    if k == -1:
-        k = train_df.shape[0]
-    for i in range(k):
-        prompt += format_example(train_df, i)
+def gen_prompt(dev_df, test_row):
+    prompt = "The following are multiple choice questions (with answers).\n\n"
+    for _, row in dev_df.iterrows():
+        prompt += format_example(row[0], row[1:5].tolist(), row[5]) + "\n\n"
+    prompt += format_example(test_row[0], test_row[1:5].tolist())
     return prompt
 
-def query_openrouter(prompt, api_key):
+def chat_completion(prompt, model, api_key):
+    url = "https://openrouter.ai/api/v1/chat/completions"
     headers = {
         "Authorization": f"Bearer {api_key}",
-        "Content-Type": "application/json"
+        "HTTP-Referer": "https://yourdomain.com",  # заміни своїм доменом
+        "X-Title": "llm-benchmarking",
+        "Content-Type": "application/json",
     }
     data = {
-        "model": "gpt-4o-mini",
+        "model": model,
         "messages": [{"role": "user", "content": prompt}],
+        "temperature": 0.0,
         "max_tokens": 1,
-        "temperature": 0,
-        "logprobs": 100,
-        "echo": True
+        "logprobs": True,
+        "top_logprobs": 5
     }
-    while True:
-        try:
-            response = requests.post("https://openrouter.ai/api/v1/chat/completions", headers=headers, json=data)
-            response.raise_for_status()
-            return response.json()
-        except requests.exceptions.RequestException as e:
-            print(f"Request error: {e}. Retrying in 1 second...")
-            time.sleep(1)
+
+    response = requests.post(url, headers=headers, data=json.dumps(data))
+    if response.status_code != 200:
+        raise Exception(f"Request failed: {response.status_code} {response.text}")
+    return response.json()
 
 def eval(args, subject, api_key, dev_df, test_df):
     cors = []
     all_probs = []
-    answers = choices[:test_df.shape[1]-2]
 
-    for i in range(test_df.shape[0]):
-        k = args.ntrain
-        prompt_end = format_example(test_df, i, include_answer=False)
-        train_prompt = gen_prompt(dev_df, subject, k)
-        prompt = train_prompt + prompt_end
+    for i in tqdm(range(len(test_df)), desc=f"Evaluating {subject}"):
+        prompt = gen_prompt(dev_df, test_df.iloc[i])
+        gt = test_df.iloc[i][5]
 
-        # Crop prompt if too long
-        while len(prompt) > 3800:  # приблизна межа, щоб не перевищити ліміт токенів
-            k -= 1
-            train_prompt = gen_prompt(dev_df, subject, k)
-            prompt = train_prompt + prompt_end
-            if k <= 0:
-                break
+        try:
+            response = chat_completion(prompt, args.model, api_key)
+            choice = response["choices"][0]
+            pred = choice["message"]["content"].strip()[0]
 
-        label = test_df.iloc[i, test_df.shape[1]-1]
+            cors.append(pred == gt)
 
-        c = query_openrouter(prompt, api_key)
+            logprobs = choice.get("logprobs")
+            if logprobs and "top_logprobs" in logprobs:
+                last_probs = logprobs["top_logprobs"][-1]
+                cleaned = {k.strip(): v for k, v in last_probs.items()}
+            else:
+                cleaned = {}
 
-        lprobs = []
-        for ans in answers:
-            try:
-                lprobs.append(c["choices"][0]["logprobs"]["top_logprobs"][-1][f" {ans}"])
-            except KeyError:
-                print(f"Warning: '{ans}' not found in logprobs. Adding -100.")
-                lprobs.append(-100)
-        pred = choices[np.argmax(lprobs)]
-        probs = softmax(np.array(lprobs))
+            all_probs.append(cleaned)
 
-        cor = pred == label
-        cors.append(cor)
-        all_probs.append(probs)
+        except Exception as e:
+            print(f"[!] Error at index {i}: {e}")
+            cors.append(False)
+            all_probs.append({})
 
-    acc = np.mean(cors)
-    print(f"Average accuracy {acc:.3f} - {subject}")
-    return np.array(cors), acc, np.array(all_probs)
+    acc = sum(cors) / len(cors)
+    return cors, acc, all_probs
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--ntrain", "-k", type=int, default=5)
-    parser.add_argument("--data_dir", "-d", type=str, default="data")
-    parser.add_argument("--save_dir", "-s", type=str, default="results")
+    parser.add_argument("--data_dir", type=str, required=True)
+    parser.add_argument("--save_dir", type=str, required=True)
+    parser.add_argument("--ntrain", type=int, default=5)
+    parser.add_argument("--model", type=str, default="openai/gpt-4o")
+    parser.add_argument("--api_key", type=str, default=os.getenv("OPENROUTER_API_KEY", ""))
     args = parser.parse_args()
 
-    api_key = os.getenv("OPENROUTER_API_KEY")
-    if api_key is None:
-        raise ValueError("OPENROUTER_API_KEY не встановлений у середовищі")
+    if not args.api_key:
+        raise ValueError("API key must be provided via --api_key or OPENROUTER_API_KEY env var")
 
-    subjects = sorted([f.split("_test.csv")[0] for f in os.listdir(os.path.join(args.data_dir, "test")) if f.endswith("_test.csv")])
+    os.makedirs(args.save_dir, exist_ok=True)
 
-    if not os.path.exists(args.save_dir):
-        os.mkdir(args.save_dir)
+    test_dir = os.path.join(args.data_dir, "test")
+    dev_dir = os.path.join(args.data_dir, "dev")
 
-    all_cors = []
+    subjects = sorted([
+        f.replace("_test.csv", "")
+        for f in os.listdir(test_dir) if f.endswith("_test.csv")
+    ])
 
     for subject in subjects:
-        dev_df = pd.read_csv(os.path.join(args.data_dir, "dev", subject + "_dev.csv"), header=None)[:args.ntrain]
-        test_df = pd.read_csv(os.path.join(args.data_dir, "test", subject + "_test.csv"), header=None)
+        dev_df = pd.read_csv(os.path.join(dev_dir, subject + "_dev.csv"), header=None)[:args.ntrain]
+        test_df = pd.read_csv(os.path.join(test_dir, subject + "_test.csv"), header=None)
 
-        cors, acc, probs = eval(args, subject, api_key, dev_df, test_df)
-        all_cors.append(cors)
+        cors, acc, probs = eval(args, subject, args.api_key, dev_df, test_df)
 
-        test_df[f"gpt4o_correct"] = cors
-        for j in range(probs.shape[1]):
-            choice = choices[j]
-            test_df[f"gpt4o_choice{choice}_probs"] = probs[:, j]
+        output = {
+            "subject": subject,
+            "accuracy": acc,
+            "correctness": cors,
+            "logprobs": probs,
+        }
 
-        test_df.to_csv(os.path.join(args.save_dir, f"{subject}_results.csv"), index=False)
+        out_path = os.path.join(args.save_dir, f"{subject}.json")
+        with open(out_path, "w") as f:
+            json.dump(output, f, indent=2)
 
-    weighted_acc = np.mean(np.concatenate(all_cors))
-    print(f"Average accuracy overall: {weighted_acc:.3f}")
+        print(f"[✔] {subject} — accuracy: {acc:.3f}")
 
 if __name__ == "__main__":
     main()
