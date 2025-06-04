@@ -97,10 +97,8 @@ def eval(args, subject, dev_df, test_df):
                 time.sleep(1)
 
         answer_text = response.choices[0].message.content.strip()
-        tqdm.write(f"Відповідь моделі: {answer_text}")
 
-        model_answers.append(answer_text)
-
+        # Знаходимо літеру відповіді серед A, B, C, D
         pred = None
         for ans in answers:
             if ans in answer_text:
@@ -113,18 +111,20 @@ def eval(args, subject, dev_df, test_df):
 
         pred_index = choices.index(pred)
         pred_text = test_df.iloc[i, 1 + pred_index]
-
+        tqdm.write(f"Відповідь моделі: {pred_text}")
         tqdm.write(f"Інтерпретація відповіді моделі: {pred_text}")
+
+        model_answers.append(pred_text)  # Зберігаємо текст відповіді
 
         cors.append(pred == label)
 
         # Тимчасово задаємо рівномірні ймовірності по варіантах
         all_probs.append([1/num_choices] * num_choices)
 
-    acc = np.mean(cors)
-    print(f"Average accuracy for {subject}: {acc:.3f}")
-    return np.array(cors), acc, np.array(all_probs), model_answers
+        acc = np.mean(cors)
+        print(f"Average accuracy for {subject}: {acc:.3f}")
 
+    return np.array(cors), acc, np.array(all_probs), model_answers
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--ntrain", "-k", type=int, default=5)
