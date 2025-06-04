@@ -12,7 +12,7 @@ if not OPENROUTER_API_KEY:
     raise ValueError("Set environment variable OPENROUTER_API_KEY with your OpenRouter API key.")
 
 # Ініціалізуємо клієнта OpenAI з передачею ключа
-client = OpenAI(api_key=OPENROUTER_API_KEY)
+client = OpenAI(api_key=os.getenv("OPENROUTER_API_KEY"), base_url="https://openrouter.ai/api/v1")
 
 choices = ["A", "B", "C", "D"]
 
