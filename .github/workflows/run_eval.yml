@@ -27,6 +27,6 @@ jobs:
 
       - name: Run evaluation script
         env:
-          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+          OPENAI_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
         run: |
           python eval_openrouter.py --data_dir data --save_dir results --ntrain 5
