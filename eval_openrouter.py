@@ -79,7 +79,6 @@ def eval(args, subject, dev_df, test_df):
                     max_tokens=1,
                     temperature=0,
                     logprobs=10,
-                    echo=True
                 )
                 break
             except Exception as e:
