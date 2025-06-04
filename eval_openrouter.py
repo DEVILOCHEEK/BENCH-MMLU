@@ -54,17 +54,16 @@ def eval(args, subject, dev_df, test_df):
     cors = []
     all_probs = []
     answers = choices[:test_df.shape[1]-2]
+    num_choices = len(answers)
 
     for i in tqdm(range(test_df.shape[0]), desc="Evaluating sample"):
-        # Виводимо номер прикладу (починаючи з 1)
-        print(f"Processing example {i+1}/{test_df.shape[0]}")
+        print(f"Processing example {i+1}/{test_df.shape[0]}")  # <-- додано
 
         k = args.ntrain
         prompt_end = format_example(test_df, i, include_answer=False)
         train_prompt = gen_prompt(dev_df, subject, k)
         prompt = train_prompt + prompt_end
 
-        # Обрізка, якщо дуже довго
         while crop(prompt) != prompt:
             k -= 1
             train_prompt = gen_prompt(dev_df, subject, k)
@@ -89,7 +88,6 @@ def eval(args, subject, dev_df, test_df):
 
         answer_text = response.choices[0].message.content.strip()
 
-        # Шукаємо варіант відповіді серед choices
         pred = None
         for ans in answers:
             if ans in answer_text:
@@ -101,13 +99,12 @@ def eval(args, subject, dev_df, test_df):
             pred = answers[0]
 
         cors.append(pred == label)
-        all_probs.append(None)  # без ймовірностей
+        all_probs.append([1/num_choices] * num_choices)
 
     acc = np.mean(cors)
     print(f"Average accuracy for {subject}: {acc:.3f}")
 
     return np.array(cors), acc, np.array(all_probs)
-
 
 def main():
     parser = argparse.ArgumentParser()
