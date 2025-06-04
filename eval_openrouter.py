@@ -57,13 +57,18 @@ def eval(args, subject, dev_df, test_df):
     num_choices = len(answers)
 
     for i in tqdm(range(test_df.shape[0]), desc="Evaluating sample"):
-        print(f"Processing example {i+1}/{test_df.shape[0]}")  # <-- додано
+        example_text = test_df.iloc[i, 0]
+        correct_answer = test_df.iloc[i, -1]
+
+        tqdm.write(f"Приклад {i+1}: {example_text}")
+        tqdm.write(f"Правильна відповідь: {correct_answer}")
 
         k = args.ntrain
         prompt_end = format_example(test_df, i, include_answer=False)
         train_prompt = gen_prompt(dev_df, subject, k)
         prompt = train_prompt + prompt_end
 
+        # Обрізка, якщо дуже довго
         while crop(prompt) != prompt:
             k -= 1
             train_prompt = gen_prompt(dev_df, subject, k)
@@ -71,7 +76,7 @@ def eval(args, subject, dev_df, test_df):
             if k == 0:
                 break
 
-        label = test_df.iloc[i, test_df.shape[1]-1]
+        label = correct_answer
 
         while True:
             try:
@@ -87,6 +92,7 @@ def eval(args, subject, dev_df, test_df):
                 time.sleep(1)
 
         answer_text = response.choices[0].message.content.strip()
+        tqdm.write(f"Відповідь моделі: {answer_text}")
 
         pred = None
         for ans in answers:
@@ -99,6 +105,8 @@ def eval(args, subject, dev_df, test_df):
             pred = answers[0]
 
         cors.append(pred == label)
+
+        # Тимчасово задаємо рівномірні ймовірності по варіантах
         all_probs.append([1/num_choices] * num_choices)
 
     acc = np.mean(cors)
